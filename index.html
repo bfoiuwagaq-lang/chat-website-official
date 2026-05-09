@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Relay | A Chat App</title>
+
+<style>
+  :root {
+    --bg: #0b0d12;
+    --panel: #111827;
+    --card: #020617;
+    --accent: #3b82f6;
+    --muted: #94a3b8;
+    --error: #ef4444;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    height: 100vh;
+    background: radial-gradient(circle at top, #111827, var(--bg));
+    color: #e5e7eb;
+    font-family: 'Inter', monospace;
+    overflow: hidden;
+  }
+
+  .panel {
+    position: absolute;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  .panel.active { display: flex; }
+
+  /* Auth Screens */
+  .auth-container {
+    max-width: 400px;
+    margin: auto;
+    width: 100%;
+    text-align: center;
+  }
+
+  .title { font-size: 2.5em; font-weight: bold; margin-bottom: 10px; letter-spacing: 1px; }
+
+  .card {
+    background: var(--card);
+    padding: 30px;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  input {
+    width: 100%;
+    padding: 12px;
+    background: #000;
+    color: white;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    outline: none;
+  }
+
+  input:focus { border-color: var(--accent); }
+
+  button {
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.2s;
+  }
+
+  .primary-btn { background: var(--accent); color: white; }
+  .primary-btn:hover { background: #2563eb; transform: translateY(-1px); }
+
+  .text-btn { background: transparent; color: var(--muted); font-size: 0.9em; }
+  .text-btn:hover { color: white; }
+
+  /* Chat Interface */
+  #chat-panel { height: 100vh; max-width: 800px; margin: 0 auto; }
+
+  .chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #1f2937;
+  }
+
+  #message-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .msg {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    line-height: 1.4;
+    word-wrap: break-word;
+  }
+
+  .msg.received { background: var(--panel); align-self: flex-start; }
+  .msg.sent { background: var(--accent); align-self: flex-end; color: white; }
+
+  .msg .user { font-size: 0.75em; color: var(--muted); display: block; margin-bottom: 4px; }
+  .msg.sent .user { color: #dbeafe; }
+
+  .chat-input-area {
+    display: flex;
+    gap: 10px;
+    padding-top: 20px;
+  }
+</style>
+</head>
+<body>
+
+<div id="login-panel" class="panel active">
+  <div class="auth-container">
+    <div class="title">tectonic</div>
+    <div class="subtitle" style="margin-bottom: 20px; color: var(--muted)">welcome back.</div>
+    <div class="card">
+      <input type="text" id="login-user" placeholder="username">
+      <input type="password" id="login-pass" placeholder="password">
+      <button class="primary-btn" onclick="handleAuth('login')">login</button>
+      <button class="text-btn" onclick="goTo('signup-panel')">don't have an account? sign up</button>
+    </div>
+  </div>
+</div>
+
+<div id="signup-panel" class="panel">
+  <div class="auth-container">
+    <div class="title">tectonic</div>
+    <div class="subtitle" style="margin-bottom: 20px; color: var(--muted)">create an account.</div>
+    <div class="card">
+      <input type="text" id="reg-user" placeholder="choose username">
+      <input type="password" id="reg-pass" placeholder="create password">
+      <button class="primary-btn" onclick="handleAuth('signup')">create account</button>
+      <button class="text-btn" onclick="goTo('login-panel')">already registered? login</button>
+    </div>
+  </div>
+</div>
+
+<div id="chat-panel" class="panel">
+  <div class="chat-header">
+    <div style="font-weight: bold; font-size: 1.2em;">#general</div>
+    <button class="text-btn" onclick="logout()">logout</button>
+  </div>
+
+  <div id="message-area">
+    </div>
+
+  <div class="chat-input-area">
+    <input type="text" id="chat-msg" placeholder="say something..." onkeypress="checkEnter(event)">
+    <button class="primary-btn" style="padding: 0 25px;" onclick="sendMessage()">send</button>
+  </div>
+</div>
+
+<script>
+  let currentUser = null;
+  const API_URL = "http://127.0.0.1:5000";
+
+  function goTo(id) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  function checkEnter(e) {
+    if (e.key === 'Enter') sendMessage();
+  }
+
+  async function handleAuth(type) {
+    const user = type === 'login' ? document.getElementById('login-user').value : document.getElementById('reg-user').value;
+    const pass = type === 'login' ? document.getElementById('login-pass').value : document.getElementById('reg-pass').value;
+
+    try {
+      const res = await fetch(`${API_URL}/${type}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: user, password: pass })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        currentUser = user;
+        goTo('chat-panel');
+        startPolling(); // Start looking for new messages
+      } else {
+        alert(data.error || "Authentication failed");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Server connection failed.");
+    }
+  }
+
+  async function sendMessage() {
+    const input = document.getElementById('chat-msg');
+    const message = input.value.trim();
+    if (!message) return;
+
+    input.value = "";
+
+    try {
+      await fetch(`${API_URL}/send_message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: currentUser, message: message })
+      });
+      fetchMessages(); // Refresh chat
+    } catch (err) {
+      console.error("Message failed", err);
+    }
+  }
+
+  async function fetchMessages() {
+    try {
+      const res = await fetch(`${API_URL}/get_messages`);
+      const data = await res.json();
+      
+      const area = document.getElementById('message-area');
+      area.innerHTML = data.messages.map(m => `
+        <div class="msg ${m.username === currentUser ? 'sent' : 'received'}">
+          <span class="user">${m.username}</span>
+          ${m.text}
+        </div>
+      `).join('');
+      
+      area.scrollTop = area.scrollHeight;
+    } catch (err) {
+      console.error("Fetch failed", err);
+    }
+  }
+
+  function startPolling() {
+    setInterval(fetchMessages, 3000); // Check for new messages every 3 seconds
+  }
+
+  function logout() {
+    currentUser = null;
+    goTo('login-panel');
+  }
+</script>
+
+</body>
+</html>
